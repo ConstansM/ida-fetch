@@ -1,4 +1,32 @@
-name: Daily fetch and push to Supabase
+name: Fetch IDA Data
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Tous les jours à minuit UTC
+  workflow_dispatch:     # Permet aussi de le déclencher manuellement
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run script
+      env:
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: python main.pyname: Daily fetch and push to Supabase
 
 on:
   schedule:
