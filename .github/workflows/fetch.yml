@@ -1,0 +1,27 @@
+name: Fetch and Upload to Supabase
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Tous les jours à 00h UTC
+  workflow_dispatch:     # Permet de le déclencher manuellement
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run script
+        env:
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python main.py
