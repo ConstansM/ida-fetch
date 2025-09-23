@@ -1,73 +1,56 @@
-import os
+import csv
 import requests
+import os
 from datetime import datetime
 
-# Supabase config
 SUPABASE_URL = "https://nwzppghjzwmrpgvuknao.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53enBwZ2hqendtcnBndnVrbmFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc0MDg5MDEsImV4cCI6MjA2Mjk4NDkwMX0.MdewfEP7EU2RviAnT_ZBOtCHteMSmTYSHhEg5NtyqAc"
 TABLE_NAME = "observations"
 
 HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "apikey": SUPABASE_API_KEY,
+    "Authorization": f"Bearer {SUPABASE_API_KEY}",
     "Content-Type": "application/json"
 }
 
-# 📁 Dossier avec les fichiers .dat
 DATA_FOLDER = "data"
 
-def parse_line(line):
-    # Exemple simplifié basé sur ton format
-    parts = line.strip().split()
-    if len(parts) < 10:
-        return None
+def parse_dat_file(file_path):
+    rows = []
+    filename = os.path.basename(file_path)
+    sensor_id = filename.split("_")[0]  # Ex: stars1217
 
-    try:
-        return {
-            "utc_datetime": parts[0] + "T" + parts[1] + "+00:00",
-            "local_datetime": parts[2] + "T" + parts[3],
-            "enclosure_temp": float(parts[4]),
-            "sky_temp": float(parts[5]),
-            "frequency": float(parts[6]),
-            "mssa": float(parts[7]),
-            "zp": float(parts[8]),
-            "sequence": int(parts[9]),
-            "tx_period": 1  # valeur par défaut
-        }
-    except:
-        return None
+    with open(file_path, "r") as f:
+        reader = csv.reader(f, delimiter=";")
+        for row in reader:
+            if len(row) < 4:
+                continue
+            if row[0].startswith("#"):
+                continue
+            try:
+                utc_datetime = datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%S.%f")
+                local_datetime = datetime.strptime(row[1], "%Y-%m-%dT%H:%M:%S.%f")
+                enclosure_temp = float(row[4])
+                rows.append({
+                    "sensor_id": sensor_id,
+                    "utc_datetime": utc_datetime.isoformat(),
+                    "local_datetime": local_datetime.isoformat(),
+                    "enclosure_temp": enclosure_temp
+                })
+            except Exception as e:
+                print(f"❌ Erreur parsing {file_path}: {e}")
+    return rows
 
-def send_data_to_supabase(payload):
-    res = requests.post(f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}", headers=HEADERS, json=payload)
-    if res.status_code == 201:
-        print("✅ Données insérées avec succès")
-    else:
-        print(f"❌ Erreur {res.status_code} – {res.text}")
-
-def main():
-    for filename in os.listdir(DATA_FOLDER):
-        if not filename.endswith(".dat"):
-            continue
-
-        filepath = os.path.join(DATA_FOLDER, filename)
-        if os.stat(filepath).st_size == 0:
-            continue  # fichier vide, on ignore
-
-        print(f"📦 Parsing {filename}")
-        sensor_id = filename.split("_")[0]
-
-        with open(filepath, "r") as f:
-            lines = f.readlines()
-
-        parsed_data = []
-        for line in lines:
-            parsed = parse_line(line)
-            if parsed:
-                parsed["sensor_id"] = sensor_id
-                parsed_data.append(parsed)
-
-        if parsed_data:
-            send_data_to_supabase(parsed_data)
-
-if __name__ == "__main__":
-    main()
+def upload_to_supabase(data):
+    BATCH_SIZE = 500
+    for i in range(0, len(data), BATCH_SIZE):
+        batch = data[i:i+BATCH_SIZE]
+        response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}",
+            headers=HEADERS,
+            json=batch
+        )
+        if response.status_code != 201:
+            print(f"❌ Batch {i//BATCH_SIZE + 1} : erreur upload {response.status_code} – {response.text}")
+        else:
+            print(f"✅ Batch {i//BATCH_SIZE + 1} : upload réussi")
